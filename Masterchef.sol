@@ -1150,7 +1150,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
         uint256 amount;         // How many LP tokens the user has provided.
         uint256 rewardDebt;     // Reward debt. See explanation below.
         //
-        // We do some fancy math here. Basically, any point in time, the amount of Yeldes
+        // We do some fancy math here. Basically, any point in time, the amount of Yieldes
         // entitled to a user but is pending to be distributed is:
         //
         //   pending reward = (user.amount * pool.accStormPerShare) - user.rewardDebt
@@ -1165,9 +1165,9 @@ contract MasterChef is Ownable, ReentrancyGuard {
     // Info of each pool.
     struct PoolInfo {
         IERC20 lpToken;           // Address of LP token contract.
-        uint256 allocPoint;       // How many allocation points assigned to this pool. Yeldes to distribute per block.
-        uint256 lastRewardBlock;  // Last block number that Yeldes distribution occurs.
-        uint256 accStormPerShare;   // Accumulated Yeldes per share, times 1e18. See below.
+        uint256 allocPoint;       // How many allocation points assigned to this pool. Yieldes to distribute per block.
+        uint256 lastRewardBlock;  // Last block number that Yieldes distribution occurs.
+        uint256 accStormPerShare;   // Accumulated Yieldes per share, times 1e18. See below.
         uint16 withdrawFeeBP;      // Deposit fee in basis points
         
     }
@@ -1191,6 +1191,9 @@ contract MasterChef is Ownable, ReentrancyGuard {
     uint256 public totalAllocPoint = 0;
     // The block number when Storm mining starts.
     uint256 public startBlock;
+    
+     // Burn address
+    address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;  
 
     // Storm referral contract address.
     IReferral public referral;
@@ -1208,7 +1211,6 @@ contract MasterChef is Ownable, ReentrancyGuard {
     event EmergencyWithdraw(address indexed user, uint256 indexed pid, uint256 amount);
     event SetFeeAddress(address indexed user, address indexed newAddress);
     event SetDevAddress(address indexed user, address indexed newAddress);
-    event SetVaultAddress(address indexed user, address indexed newAddress);
     event SetReferralAddress(address indexed user, IReferral indexed newAddress);
     event UpdateEmissionRate(address indexed user, uint256 StormPerBlock);
     event ReferralCommissionPaid(address indexed user, address indexed referrer, uint256 commissionAmount);
@@ -1309,6 +1311,8 @@ contract MasterChef is Ownable, ReentrancyGuard {
         uint256 StormReward = multiplier.mul(StormPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
         Storm.mint(devAddress, StormReward.div(10));
         Storm.mint(address(this), StormReward);
+        // Automatically burn 2% of minted tokens
+        Storm.mint(BURN_ADDRESS, StormReward.mul(20).div(1000));
         pool.accStormPerShare = pool.accStormPerShare.add(StormReward.mul(1e18).div(lpSupply));
         pool.lastRewardBlock = block.number;
     }
@@ -1333,7 +1337,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
             pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
             uint256 final_amount=pool.lpToken.balanceOf(address(this)).sub(balancebefore);
             user.amount = user.amount.add(final_amount);
-            // pool.lpSupply=pool.lpSupply.add(final_amount);
+            
             
         }
         user.rewardDebt = user.amount.mul(pool.accStormPerShare).div(1e18);
