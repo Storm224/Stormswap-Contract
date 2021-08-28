@@ -660,7 +660,7 @@ contract BEP20 is Context, IBEP20, Ownable {
 pragma solidity 0.6.12;
 
 
-contract STORM is BEP20(' STR', 'STR') {
+contract STORM is BEP20(' STORM Token', 'STORM') {
     /// @notice Creates `_amount` token to `_to`. Must only be called by the owner (MasterChef).
     function mint(address _to, uint256 _amount) public onlyOwner {
         _mint(_to, _amount);
