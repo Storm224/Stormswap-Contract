@@ -1179,9 +1179,9 @@ contract MasterChef is Ownable, ReentrancyGuard {
     
 
     // Storm tokens created per block.
-    uint256 public StormPerBlock = 0.012 ether;
+    uint256 public StormPerBlock = 1.2 ether;
     
-    uint256 constant MAX_STORM_PERBLOCK= 0.2 ether;
+    uint256 constant MAX_STORM_PERBLOCK= 2 ether;
 
     // Info of each pool.
     PoolInfo[] public poolInfo;
