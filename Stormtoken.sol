@@ -387,7 +387,7 @@ contract BEP20 is Context, IBEP20, Ownable {
 
     uint256 private _totalSupply;
     uint256 private MAXCAP;
-    uint256 constant MAXCAPSUPPLY=22000*1e18;
+    uint256 constant MAXCAPSUPPLY=3700000*1e18;
 
     string private _name;
     string private _symbol;
