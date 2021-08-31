@@ -1168,12 +1168,13 @@ contract MasterChef is Ownable, ReentrancyGuard {
         uint256 allocPoint;       // How many allocation points assigned to this pool. Yieldes to distribute per block.
         uint256 lastRewardBlock;  // Last block number that Yieldes distribution occurs.
         uint256 accStormPerShare;   // Accumulated Yieldes per share, times 1e18. See below.
-        uint16 withdrawFeeBP;      // Deposit fee in basis points
+        uint16 withdrawFeeBP;      // withdraw fee in basis points
+        uint256 lpSupply;
         
     }
 
     // The Storm TOKEN!
-    STORM public Storm;
+    STORM public immutable Storm;
     address public devAddress;
     address public feeAddress;
     
@@ -1211,7 +1212,6 @@ contract MasterChef is Ownable, ReentrancyGuard {
     event EmergencyWithdraw(address indexed user, uint256 indexed pid, uint256 amount);
     event SetFeeAddress(address indexed user, address indexed newAddress);
     event SetDevAddress(address indexed user, address indexed newAddress);
-    event SetReferralAddress(address indexed user, IReferral indexed newAddress);
     event UpdateEmissionRate(address indexed user, uint256 StormPerBlock);
     event ReferralCommissionPaid(address indexed user, address indexed referrer, uint256 commissionAmount);
 
@@ -1243,27 +1243,35 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
 
     // Add a new lp to the pool. Can only be called by the owner.
-    function add(uint256 _allocPoint, IERC20 _lpToken, uint16 _withdrawFeeBP) external onlyOwner nonDuplicated(_lpToken) {
-        require(_withdrawFeeBP <= 400, "add: invalid deposit fee basis points");
+    function add(uint256 _allocPoint, IERC20 _lpToken, uint16 _withdrawFeeBP,bool _withUpdate) external onlyOwner nonDuplicated(_lpToken) {
+        require(_withdrawFeeBP <= 400, "add: invalid withdraw fee basis points");
         uint256 lastRewardBlock = block.number > startBlock ? block.number : startBlock;
+        _lpToken.balanceOf(address(this));
         totalAllocPoint = totalAllocPoint.add(_allocPoint);
+        if (_withUpdate) {
+            massUpdatePools();
+        }
         poolExistence[_lpToken] = true;
         poolInfo.push(PoolInfo({
             lpToken: _lpToken,
             allocPoint: _allocPoint,
             lastRewardBlock: lastRewardBlock,
             accStormPerShare: 0,
-            withdrawFeeBP: _withdrawFeeBP
+            withdrawFeeBP: _withdrawFeeBP,
+            lpSupply:0
             
         }));
         
         emit Add(_allocPoint,_lpToken,_withdrawFeeBP);
     }
 
-    // Update the given pool's Storm allocation point and deposit fee. Can only be called by the owner.
-    function set(uint256 _pid, uint256 _allocPoint, uint16 _withdrawFeeBP) external onlyOwner {
-        require(_withdrawFeeBP <= 400, "set: invalid deposit fee basis points");
+    // Update the given pool's Storm allocation point and withdraw fee. Can only be called by the owner.
+    function set(uint256 _pid, uint256 _allocPoint, uint16 _withdrawFeeBP,bool _withUpdate) external onlyOwner {
+        require(_withdrawFeeBP <= 400, "set: invalid withdraw fee basis points");
         totalAllocPoint = totalAllocPoint.sub(poolInfo[_pid].allocPoint).add(_allocPoint);
+        if (_withUpdate) {
+            massUpdatePools();
+        }
         poolInfo[_pid].allocPoint = _allocPoint;
         poolInfo[_pid].withdrawFeeBP = _withdrawFeeBP;
         emit Set(_pid,_allocPoint,_withdrawFeeBP);
@@ -1279,7 +1287,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
         uint256 accStormPerShare = pool.accStormPerShare;
-        uint256 lpSupply = pool.lpToken.balanceOf(address(this));
+        uint256 lpSupply = pool.lpSupply;
         if (block.number > pool.lastRewardBlock && lpSupply != 0 && totalAllocPoint>0) {
             uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
             uint256 StormReward = multiplier.mul(StormPerBlock).mul(pool.allocPoint).div(totalAllocPoint);
@@ -1302,7 +1310,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
         if (block.number <= pool.lastRewardBlock) {
             return;
         }
-        uint256 lpSupply = pool.lpToken.balanceOf(address(this));
+        uint256 lpSupply = pool.lpSupply;
         if (lpSupply == 0 || pool.allocPoint == 0) {
             pool.lastRewardBlock = block.number;
             return;
@@ -1318,7 +1326,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
 
     // Deposit LP tokens to MasterChef for Storm allocation.
-    function deposit(uint256 _pid, uint256 _amount, address _referrer) public nonReentrant {
+    function deposit(uint256 _pid, uint256 _amount, address _referrer) external nonReentrant {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         updatePool(_pid);
@@ -1337,7 +1345,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
             pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
             uint256 final_amount=pool.lpToken.balanceOf(address(this)).sub(balancebefore);
             user.amount = user.amount.add(final_amount);
-            
+            pool.lpSupply=pool.lpSupply.add(final_amount);
             
         }
         user.rewardDebt = user.amount.mul(pool.accStormPerShare).div(1e18);
@@ -1345,7 +1353,7 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
 
     // Withdraw LP tokens from MasterChef.
-    function withdraw(uint256 _pid, uint256 _amount) public nonReentrant {
+    function withdraw(uint256 _pid, uint256 _amount) external nonReentrant {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         require(user.amount >= _amount, "withdraw: not good");
@@ -1362,8 +1370,10 @@ contract MasterChef is Ownable, ReentrancyGuard {
                 uint256 withdrawFee = _amount.mul(pool.withdrawFeeBP).div(10000);
                 pool.lpToken.safeTransfer(feeAddress, withdrawFee);
                 pool.lpToken.safeTransfer(address(msg.sender), _amount.sub(withdrawFee));
+                pool.lpSupply=pool.lpSupply.sub(_amount);
             } else {
                 pool.lpToken.safeTransfer(address(msg.sender), _amount);
+                pool.lpSupply=pool.lpSupply.sub(_amount);
             }
         }
         user.rewardDebt = user.amount.mul(pool.accStormPerShare).div(1e18);
@@ -1371,19 +1381,20 @@ contract MasterChef is Ownable, ReentrancyGuard {
     }
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
-    function emergencyWithdraw(uint256 _pid) public nonReentrant {
+    function emergencyWithdraw(uint256 _pid) external nonReentrant {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         uint256 amount = user.amount;
         uint256 withdrawFee = amount.mul(pool.withdrawFeeBP).div(10000);
         user.amount = 0;
         user.rewardDebt = 0;
+        pool.lpSupply=pool.lpSupply.sub(amount);
         pool.lpToken.safeTransfer(feeAddress, withdrawFee);
         pool.lpToken.safeTransfer(address(msg.sender), amount.sub(withdrawFee));
         emit EmergencyWithdraw(msg.sender, _pid, amount);
     }
 
-    // Safe Storm transfer function, just in case if rounding error causes pool to not have enough FOXs.
+    // Safe Storm transfer function, just in case if rounding error causes pool to not have enough Storm.
     function safeStormTransfer(address _to, uint256 _amount) internal {
         uint256 StormBal = Storm.balanceOf(address(this));
         bool transferSuccess = false;
