@@ -570,7 +570,7 @@ contract Referral is IReferral, Ownable {
         }
     }
     
-    function recordReferralCommission(address _referrer, uint256 _commission) public override onlyOperator {
+    function recordReferralCommission(address _referrer, uint256 _commission) external override onlyOperator {
 		if (_referrer != address(0) && _commission > 0) {
 			totalReferralCommissions[_referrer] += _commission;
 			emit ReferralCommissionRecorded(_referrer, _commission);
