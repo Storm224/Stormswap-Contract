@@ -593,7 +593,7 @@ contract BEP20 is Context, IBEP20, Ownable {
      */
     function _mint(address account, uint256 amount) internal {
         require(account != address(0), 'BEP20: mint to the zero address');
-        require((MAXCAP+amount)<=MAXCAPSUPPLY,"Max supply reached");
+        require((MAXCAP.add(amount))<=MAXCAPSUPPLY,"Max supply reached");
 
         _totalSupply = _totalSupply.add(amount);
         MAXCAP=MAXCAP.add(amount);
